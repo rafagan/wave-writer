@@ -1,0 +1,3 @@
+/Users/Projects/estudos/wave-writer/cmake-build-debug/CMakeFiles/rebuild_cache.dir
+/Users/Projects/estudos/wave-writer/cmake-build-debug/CMakeFiles/edit_cache.dir
+/Users/Projects/estudos/wave-writer/cmake-build-debug/CMakeFiles/wave_writer.dir
