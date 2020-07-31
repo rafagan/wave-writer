@@ -10,13 +10,13 @@
 // https://wavefilegem.com/how_wave_files_work.html
 struct WaveHeader {
     // First part: RIFF header format
-    char riff[4]; // Always "RIFF"
+    char riff[4]; // "RIFF" (Little Endian) or "RIFX" (Big Endian)
     unsigned int fileBitCount; // header + raw bits
     char wave[4]; // Always "WAVE"
-    char fmt_[4]; // Always "fmt " (there's a space at the end)
-    unsigned int formatBitCount; // Always 16 (4 previous bytes)
 
     // Second part: Wave header format
+    char fmt_[4]; // Always "fmt " (there's a space at the end)
+    unsigned int formatBitCount; // Usually 16
     unsigned short waveFormat; // Almost always 1 (PCM), 3 if IEEE float
     unsigned int channelCount; // 1 for mono, 2 for stereo
     unsigned int sampleRate; // Samples per second, maximum hertz representable in file
@@ -27,7 +27,7 @@ struct WaveHeader {
     // Third part: Non-PCM header (only appears if waveFormat is not PCM)
     unsigned short extensionByteCount; // Almost always 0
     char fact[4]; // Always "fact"
-    unsigned int factByteCount; // Almost always 4
+    unsigned int factBitCount; // Almost always 4
     unsigned int frameRate; // Probably the same value as sampleRate
 
     // Fourth part: Raw data
@@ -54,18 +54,24 @@ struct WaveHeader {
             cout << "[36, 39], 4, Subchunk2ID: " << data[0] << data[1] << data[2] << data[3] << endl;
             cout << "[40, 43], 4, Subchunk2Size: " << rawBitCount << endl;
         } else {
-
-
-            cout << "[36, 39], 4, Subchunk2ID: " << data[0] << data[1] << data[2] << data[3] << endl;
-            cout << "[40, 43], 4, Subchunk2Size: " << rawBitCount << endl;
+            cout << "[36, 37], 2, ExtensionSize: " << extensionByteCount << endl;
+            cout << "[38, 41], 4, Subchunk2ID: " << fact[0] << fact[1] << fact[2] << fact[3] << endl;
+            cout << "[42, 45], 4, Subchunk2Size: " << factBitCount << endl;
+            cout << "[46, 49], 4, FrameRate: " << frameRate << endl;
+            cout << "[50, 53], 4, Subchunk3ID: " << data[0] << data[1] << data[2] << data[3] << endl;
+            cout << "[54, 57], 4, Subchunk3Size: " << rawBitCount << endl;
         }
         cout << endl;
+    }
+
+    [[nodiscard]] inline bool isPcm() const {
+        return waveFormat == 1;
     }
 };
 
 /**
  * A simple wave codec for study proposal
- * T: Use float (for 32 bits float) or short (for signed 16 bits) encoding
+ * T: Example: Use float (for 32 bits float) or short (for signed 16 bits) encoding
  */
 template <typename T>
 class Wave {
@@ -73,15 +79,104 @@ private:
     unsigned int sampleRate{0};
     unsigned short channelCount{0};
     const unsigned short byteDepth{0};
-    bool decimal{false};
 
     WaveHeader header{};
     std::vector<T> raw;
+
+    void readRiff(char id[4], std::ifstream& file) {
+        memcpy(header.riff, id, 4);
+
+        constexpr short count = 2;
+        void* pointers[count] = { &header.fileBitCount, &header.wave };
+        short bytes[count] = { 4, 4 };
+
+        for(auto i = 0; i < count; i++) {
+            file.read(reinterpret_cast<char *>(pointers[i]), bytes[i]);
+        }
+
+        if(memcmp(header.wave, "WAVE", 4) != 0) throw std::runtime_error("Must be a wave file");
+    }
+
+    void readFmt(char id[4], std::ifstream& file) {
+        memcpy(header.fmt_, id, 4);
+
+        constexpr short count = 7;
+        void* pointers[count] = {
+                &header.formatBitCount,
+                &header.waveFormat,
+                &header.channelCount,
+                &header.sampleRate,
+                &header.byteRate,
+                &header.frameByteCount,
+                &header.bitDepth
+        };
+        short bytes[count] = { 4, 2, 2, 4, 4, 2, 2 };
+
+        for(auto i = 0; i < count; i++) {
+            file.read(reinterpret_cast<char *>(pointers[i]), bytes[i]);
+        }
+
+        if(!header.isPcm() && header.formatBitCount > 16) {
+            file.read(reinterpret_cast<char *>(&header.extensionByteCount), 2);
+            // TODO: Add support to extension header
+            if(header.extensionByteCount != 0) {
+                std::cout << "Skipping extension bytes: " << header.extensionByteCount << " bytes" << std::endl;
+                file.ignore(header.extensionByteCount);
+            }
+        }
+    }
+
+    void readData(char id[4], std::ifstream& file) {
+        memcpy(header.data, id, 4);
+
+        file.read(reinterpret_cast<char *>(&header.rawBitCount), 4);
+
+        this->sampleRate = header.sampleRate;
+        this->channelCount = header.channelCount;
+        auto bytesPerSample = header.bitDepth / 8;
+
+        raw.clear();
+        for(int i = 0; i < header.rawBitCount / bytesPerSample; i++) {
+            T sample;
+            file.read(reinterpret_cast<char *>(&sample), bytesPerSample);
+            raw.push_back(sample);
+        }
+    }
+
+    void readFact(char id[4], std::ifstream& file) {
+        memcpy(header.fact, id, 4);
+
+        constexpr short count = 2;
+        void* pointers[count] = { &header.factBitCount, &header.frameRate };
+        short bytes[count] = { 4, 4 };
+
+        for(auto i = 0; i < count; i++) {
+            file.read(reinterpret_cast<char *>(pointers[i]), bytes[i]);
+        }
+
+        if(header.factBitCount != 4) throw std::runtime_error("Unsupported fact header");
+    }
+
+    void readPeak(char id[4], std::ifstream& file) {
+        file.ignore(20);
+        std::cout << "Skipping PEAK header" << std::endl;
+        // TODO: Add support to PEAK header
+    }
+
+    void readUndefinedHeader(char id[4], std::ifstream& file) {
+        unsigned int headerSize;
+        file.read(reinterpret_cast<char *>(&headerSize), 4);
+        file.ignore(headerSize / 8);
+        std::cout
+            << "Unknown header "
+            << id[0] << id[0] << id[2] << id[3] <<
+            ". Skipping " << headerSize << " bits" << std::endl;
+    }
 public:
     explicit Wave() = default;
 
-    explicit Wave(unsigned int sampleRate, unsigned int channelCount, unsigned short byteDepth, bool decimal)
-        : sampleRate(sampleRate), channelCount(channelCount), byteDepth(byteDepth), decimal(decimal)
+    explicit Wave(unsigned int sampleRate, unsigned int channelCount, unsigned short byteDepth)
+        : sampleRate(sampleRate), channelCount(channelCount), byteDepth(byteDepth)
     {
 
     }
@@ -92,35 +187,21 @@ public:
         ifstream file(path, ios::binary);
         if(!file.is_open()) throw runtime_error("File not found");
 
-        file.read(header.riff, 4);
-        file.read(reinterpret_cast<char *>(&header.fileBitCount), 4);
-        file.read(header.wave, 4);
-        file.read(header.fmt_, 4);
-        file.read(reinterpret_cast<char *>(&header.formatBitCount), 4);
-        file.read(reinterpret_cast<char *>(&header.waveFormat), 2);
-        file.read(reinterpret_cast<char *>(&header.channelCount), 2);
-        file.read(reinterpret_cast<char *>(&header.sampleRate), 4);
-        file.read(reinterpret_cast<char *>(&header.byteRate), 4);
-        file.read(reinterpret_cast<char *>(&header.frameByteCount), 2);
-        file.read(reinterpret_cast<char *>(&header.bitDepth), 2);
-        file.read(header.data, 4);
-        file.read(reinterpret_cast<char *>(&header.rawBitCount), 4);
+        char subChunkId[4];
+        do {
+            file.read(subChunkId, 4);
+
+            // TODO: Add support to RIFX (RIFF is Little Endian, RIFX is Big Endian)
+
+            if(strcmp(subChunkId, "RIFF") == 0) readRiff(subChunkId, file);
+            else if(strcmp(subChunkId, "fmt ") == 0) readFmt(subChunkId, file);
+            else if(strcmp(subChunkId, "fact") == 0) readFact(subChunkId, file);
+            else if(strcmp(subChunkId, "data") == 0) readData(subChunkId, file);
+            else if(strcmp(subChunkId, "PEAK") == 0) readPeak(subChunkId, file);
+            else readUndefinedHeader(subChunkId, file);
+        } while (strcmp(subChunkId, "data") != 0);
 
         header.print();
-
-        this->sampleRate = header.sampleRate;
-        this->channelCount = header.channelCount;
-        auto bytesPerSample = header.bitDepth / 8;
-        constexpr unsigned int maxShort = 1 << 16;
-
-        // Third part: Raw PCM encoded data
-        raw.clear();
-
-        for(int i = 0; i < header.rawBitCount / bytesPerSample; i++) {
-            T sample;
-            file.read(reinterpret_cast<char *>(&sample), bytesPerSample);
-            raw.push_back(sample);
-        }
 
         file.close();
     }

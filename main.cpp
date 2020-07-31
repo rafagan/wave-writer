@@ -1,5 +1,4 @@
 #include <iostream>
-#include <fstream>
 #include <cmath>
 #include <vector>
 
@@ -7,7 +6,7 @@
 
 using namespace std;
 
-const string PATH = "/Users/rafagan/Desktop/";
+constexpr char PATH[] = "/Users/rafagan/Desktop/Wave/";
 
 vector<float> genSineData(float secs, unsigned int frequency, unsigned int sampleRate, float amplitude) {
     vector<float> data;
@@ -25,9 +24,9 @@ vector<float> genSineData(float secs, unsigned int frequency, unsigned int sampl
 int main() {
     auto raw = genSineData(5, 200, 48000, 1.0f);
 
-    auto wave = Wave<short>(48000, 1, 2, false);
-    wave.read(PATH + "ride16h.wav");
-    wave.flush();
-    wave.write(PATH + "rideOut.wav");
+    auto wave = Wave<short>(48000, 1, 2);
+    wave.read(string(PATH) + "ridemsadpcm.wav");
+//    wave.flush();
+//    wave.write(string(PATH) + "rideOut.wav");
     return 0;
 }
