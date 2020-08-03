@@ -235,10 +235,6 @@ public:
         file.close();
     }
 
-    void setBinary() {
-
-    }
-
     void flush() {
         header.sampleRate = this->sampleRate;
         header.channelCount = this->channelCount;

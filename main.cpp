@@ -25,7 +25,7 @@ int main() {
     auto raw = genSineData(5, 200, 48000, 1.0f);
 
     auto wave = Wave<short>(48000, 1, 2);
-    wave.read(string(PATH) + "ridemsadpcm.wav");
+    wave.read(string(PATH) + "ride16.wav");
 //    wave.flush();
 //    wave.write(string(PATH) + "rideOut.wav");
     return 0;
