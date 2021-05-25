@@ -6,7 +6,7 @@
 
 using namespace std;
 
-constexpr char PATH[] = "/Users/rafagan/Desktop/Wave/";
+constexpr char PATH[] = "/Users/Projects/estudos/wave-writer/";
 
 vector<float> genSineData(float secs, unsigned int frequency, unsigned int sampleRate, float amplitude) {
     vector<float> data;
@@ -25,7 +25,7 @@ int main() {
     auto raw = genSineData(5, 200, 48000, 1.0f);
 
     auto wave = Wave<short>(48000, 1, 2);
-    wave.read(string(PATH) + "ride16.wav");
+    wave.read(string(PATH) + "mp3_wav.wav");
 //    wave.flush();
 //    wave.write(string(PATH) + "rideOut.wav");
     return 0;

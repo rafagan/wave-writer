@@ -84,6 +84,7 @@ private:
     std::vector<T> raw;
 
     void readRiff(char id[4], std::ifstream& file) {
+        std::cout << "Reading riff header" << std::endl;
         memcpy(header.riff, id, 4);
 
         constexpr short count = 2;
@@ -98,6 +99,7 @@ private:
     }
 
     void readFmt(char id[4], std::ifstream& file) {
+        std::cout << "Reading fmt header" << std::endl;
         memcpy(header.fmt_, id, 4);
 
         constexpr short count = 7;
@@ -127,6 +129,7 @@ private:
     }
 
     void readData(char id[4], std::ifstream& file) {
+        std::cout << "Reading data" << std::endl;
         memcpy(header.data, id, 4);
 
         file.read(reinterpret_cast<char *>(&header.rawBitCount), 4);
@@ -144,6 +147,7 @@ private:
     }
 
     void readFact(char id[4], std::ifstream& file) {
+        std::cout << "Reading fact header" << std::endl;
         memcpy(header.fact, id, 4);
 
         constexpr short count = 2;
@@ -164,9 +168,11 @@ private:
     }
 
     void readUndefinedHeader(char id[4], std::ifstream& file) {
+        if(id[0] == 0) return;
+
         unsigned int headerSize;
         file.read(reinterpret_cast<char *>(&headerSize), 4);
-        file.ignore(headerSize / 8);
+        file.ignore(headerSize);
         std::cout
             << "Unknown header "
             << id[0] << id[0] << id[2] << id[3] <<
